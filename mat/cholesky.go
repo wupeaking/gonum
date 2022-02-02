@@ -25,6 +25,9 @@ var (
 	_ Symmetric = (*BandCholesky)(nil)
 	_ Banded    = (*BandCholesky)(nil)
 	_ SymBanded = (*BandCholesky)(nil)
+
+	_ Matrix    = (*PivotedCholesky)(nil)
+	_ Symmetric = (*PivotedCholesky)(nil)
 )
 
 // Cholesky is a symmetric positive definite matrix represented by its
@@ -922,4 +925,95 @@ func (ch *BandCholesky) LogDet() float64 {
 
 func (ch *BandCholesky) valid() bool {
 	return ch.chol != nil && !ch.chol.IsEmpty()
+}
+
+type PivotedCholesky struct {
+	chol        *TriDense
+	piv, pivIdx []int
+	rank        int
+	ok          bool
+}
+
+func (c *PivotedCholesky) Factorize(a Symmetric) (ok bool) {
+	n := a.SymmetricDim()
+	if c.chol == nil {
+		c.chol = NewTriDense(n, Upper, nil)
+	} else {
+		c.chol.Reset()
+		c.chol.reuseAsNonZeroed(n, Upper)
+	}
+	copySymIntoTriangle(c.chol, a)
+
+	c.piv = useInt(c.piv, n)
+	c.pivIdx = useInt(c.pivIdx, n)
+
+	work := getFloat64s(2*c.chol.mat.N, false)
+	defer putFloat64s(work)
+
+	sym := c.chol.asSymBlas()
+	_, c.rank, c.ok = lapack64.Pstrf(sym, c.piv, -1, work)
+
+	for i, p := range c.piv {
+		c.pivIdx[p] = i
+	}
+
+	return c.ok
+}
+
+func (ch *PivotedCholesky) Dims() (r, c int) {
+	if ch.IsEmpty() {
+		panic(badCholesky)
+	}
+	r, c = ch.chol.Dims()
+	return r, c
+}
+
+func (c *PivotedCholesky) At(i, j int) float64 {
+	if c.IsEmpty() {
+		panic(badCholesky)
+	}
+	n := c.SymmetricDim()
+	if uint(i) >= uint(n) {
+		panic(ErrRowAccess)
+	}
+	if uint(j) >= uint(n) {
+		panic(ErrColAccess)
+	}
+
+	i = c.pivIdx[i]
+	j = c.pivIdx[j]
+	minij := min(min(i+1, j+1), c.rank)
+	var val float64
+	for k := 0; k < minij; k++ {
+		val += c.chol.at(k, i) * c.chol.at(k, j)
+	}
+	return val
+}
+
+func (c *PivotedCholesky) T() Matrix {
+	return c
+}
+
+func (c *PivotedCholesky) SymmetricDim() int {
+	n, _ := c.chol.Dims()
+	return n
+}
+
+func (c *PivotedCholesky) IsEmpty() bool {
+	return c.chol == nil || c.chol.IsEmpty()
+}
+
+func (c *PivotedCholesky) Reset() {
+	if c.chol != nil {
+		c.chol.Reset()
+	}
+	c.rank = 0
+	c.ok = false
+}
+
+func (c *PivotedCholesky) Rank() int {
+	if c.IsEmpty() {
+		panic(badCholesky)
+	}
+	return c.rank
 }
