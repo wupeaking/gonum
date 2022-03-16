@@ -8,6 +8,7 @@ import (
 	"container/heap"
 
 	"gonum.org/v1/gonum/graph"
+	"gonum.org/v1/gonum/graph/iterator"
 	"gonum.org/v1/gonum/graph/traverse"
 )
 
@@ -26,6 +27,84 @@ func DijkstraFrom(u graph.Node, g traverse.Graph) Shortest {
 			return Shortest{from: u}
 		}
 		path = newShortestFrom(u, graph.NodesOf(h.Nodes()))
+	} else {
+		if g.From(u.ID()) == graph.Empty {
+			return Shortest{from: u}
+		}
+		path = newShortestFrom(u, []graph.Node{u})
+	}
+
+	var weight Weighting
+	if wg, ok := g.(Weighted); ok {
+		weight = wg.Weight
+	} else {
+		weight = UniformCost(g)
+	}
+
+	// Dijkstra's algorithm here is implemented essentially as
+	// described in Function B.2 in figure 6 of UTCS Technical
+	// Report TR-07-54.
+	//
+	// This implementation deviates from the report as follows:
+	// - the value of path.dist for the start vertex u is initialized to 0;
+	// - outdated elements from the priority queue (i.e. with respect to the dist value)
+	//   are skipped.
+	//
+	// http://www.cs.utexas.edu/ftp/techreports/tr07-54.pdf
+	Q := priorityQueue{{node: u, dist: 0}}
+	for Q.Len() != 0 {
+		mid := heap.Pop(&Q).(distanceNode)
+		k := path.indexOf[mid.node.ID()]
+		if mid.dist > path.dist[k] {
+			continue
+		}
+		mnid := mid.node.ID()
+		to := g.From(mnid)
+		for to.Next() {
+			v := to.Node()
+			vid := v.ID()
+			j, ok := path.indexOf[vid]
+			if !ok {
+				j = path.add(v)
+			}
+			w, ok := weight(mnid, vid)
+			if !ok {
+				panic("dijkstra: unexpected invalid weight")
+			}
+			if w < 0 {
+				panic("dijkstra: negative edge weight")
+			}
+			joint := path.dist[k] + w
+			if joint < path.dist[j] {
+				heap.Push(&Q, distanceNode{node: v, dist: joint})
+				path.set(j, joint, k)
+			}
+		}
+	}
+
+	return path
+}
+
+// DijkstraFrom returns a shortest-path tree for a shortest path from u to all nodes in
+// the graph g. If the graph does not implement Weighted, UniformCost is used.
+// DijkstraFrom will panic if g has a u-reachable negative edge weight.
+//
+// If g is a graph.Graph, all nodes of the graph will be stored in the shortest-path
+// tree, otherwise only nodes reachable from u will be stored.
+//
+// The time complexity of DijkstrFrom is O(|E|.log|V|).
+func DijkstraFromTo(u graph.Node, g traverse.Graph, to ...int64) Shortest {
+	var path Shortest
+	if h, ok := g.(graph.Graph); ok {
+		if h.Node(u.ID()) == nil {
+			return Shortest{from: u}
+		}
+		d := make(map[int64]graph.Node)
+		for _, t := range to {
+			d[t] = h.Node(t)
+		}
+		nodes := iterator.NewNodes(d)
+		path = newShortestFrom(u, graph.NodesOf(nodes))
 	} else {
 		if g.From(u.ID()) == graph.Empty {
 			return Shortest{from: u}
