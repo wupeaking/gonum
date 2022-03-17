@@ -131,6 +131,7 @@ func DijkstraFromTo(u graph.Node, g traverse.Graph, dst int64) float64 {
 		}
 		mnid := mid.node.ID()
 		to := g.From(mnid)
+		find := false
 		for to.Next() {
 			v := to.Node()
 			vid := v.ID()
@@ -151,7 +152,13 @@ func DijkstraFromTo(u graph.Node, g traverse.Graph, dst int64) float64 {
 				path.set(j, joint, k)
 			}
 			if vid == dst {
-				return path.dist[j]
+				find = true
+			}
+		}
+		if find {
+			index, ok := path.indexOf[dst]
+			if ok {
+				return path.dist[index]
 			}
 		}
 	}
