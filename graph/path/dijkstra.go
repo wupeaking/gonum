@@ -6,9 +6,9 @@ package path
 
 import (
 	"container/heap"
+	"math"
 
 	"gonum.org/v1/gonum/graph"
-	"gonum.org/v1/gonum/graph/iterator"
 	"gonum.org/v1/gonum/graph/traverse"
 )
 
@@ -85,29 +85,22 @@ func DijkstraFrom(u graph.Node, g traverse.Graph) Shortest {
 	return path
 }
 
-// DijkstraFrom returns a shortest-path tree for a shortest path from u to all nodes in
-// the graph g. If the graph does not implement Weighted, UniformCost is used.
-// DijkstraFrom will panic if g has a u-reachable negative edge weight.
-//
-// If g is a graph.Graph, all nodes of the graph will be stored in the shortest-path
-// tree, otherwise only nodes reachable from u will be stored.
-//
-// The time complexity of DijkstrFrom is O(|E|.log|V|).
-func DijkstraFromTo(u graph.Node, g traverse.Graph, to ...int64) Shortest {
+// 计算从u 到 v具体的路径长度
+func DijkstraFromTo(u graph.Node, g traverse.Graph, dst int64) float64 {
 	var path Shortest
 	if h, ok := g.(graph.Graph); ok {
 		if h.Node(u.ID()) == nil {
-			return Shortest{from: u}
+			return math.MaxFloat64
 		}
-		d := make(map[int64]graph.Node)
-		for _, t := range to {
-			d[t] = h.Node(t)
-		}
-		nodes := iterator.NewNodes(d)
-		path = newShortestFrom(u, graph.NodesOf(nodes))
+		// d := make(map[int64]graph.Node)
+		// for _, t := range to {
+		// 	d[t] = h.Node(t)
+		// }
+		// nodes := iterator.NewNodes(d)
+		path = newShortestFrom(u, graph.NodesOf(h.Nodes()))
 	} else {
 		if g.From(u.ID()) == graph.Empty {
-			return Shortest{from: u}
+			return math.MaxFloat64
 		}
 		path = newShortestFrom(u, []graph.Node{u})
 	}
@@ -157,10 +150,12 @@ func DijkstraFromTo(u graph.Node, g traverse.Graph, to ...int64) Shortest {
 				heap.Push(&Q, distanceNode{node: v, dist: joint})
 				path.set(j, joint, k)
 			}
+			if vid == dst {
+				return path.dist[j]
+			}
 		}
 	}
-
-	return path
+	return math.MaxFloat64
 }
 
 // DijkstraAllFrom returns a shortest-path tree for shortest paths from u to all nodes in
