@@ -123,15 +123,22 @@ func DijkstraFromTo(u graph.Node, g traverse.Graph, dst int64) float64 {
 	//
 	// http://www.cs.utexas.edu/ftp/techreports/tr07-54.pdf
 	Q := priorityQueue{{node: u, dist: 0}}
+	startPopCnt := false
+	popLen := 0
+	find := false
+
 	for Q.Len() != 0 {
 		mid := heap.Pop(&Q).(distanceNode)
+		if startPopCnt {
+			popLen--
+		}
 		k := path.indexOf[mid.node.ID()]
 		if mid.dist > path.dist[k] {
 			continue
 		}
 		mnid := mid.node.ID()
 		to := g.From(mnid)
-		find := false
+
 		for to.Next() {
 			v := to.Node()
 			vid := v.ID()
@@ -155,11 +162,18 @@ func DijkstraFromTo(u graph.Node, g traverse.Graph, dst int64) float64 {
 				find = true
 			}
 		}
-		if find {
-			index, ok := path.indexOf[dst]
-			if ok {
-				return path.dist[index]
-			}
+		if find && !startPopCnt {
+			startPopCnt = true
+			popLen = Q.Len()
+		}
+		if startPopCnt && popLen <= 0 {
+			break
+		}
+	}
+	if find {
+		index, ok := path.indexOf[dst]
+		if ok {
+			return path.dist[index]
 		}
 	}
 	return math.MaxFloat64
