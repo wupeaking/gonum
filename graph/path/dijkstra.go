@@ -166,7 +166,7 @@ func DijkstraFromTo(u graph.Node, g traverse.Graph, dst int64) float64 {
 			startPopCnt = true
 			popLen = Q.Len()
 		}
-		if startPopCnt && popLen <= 0 {
+		if startPopCnt && popLen < 0 {
 			break
 		}
 	}
