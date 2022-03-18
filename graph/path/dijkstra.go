@@ -9,6 +9,7 @@ import (
 	"math"
 
 	"gonum.org/v1/gonum/graph"
+	"gonum.org/v1/gonum/graph/simple"
 	"gonum.org/v1/gonum/graph/traverse"
 )
 
@@ -85,8 +86,8 @@ func DijkstraFrom(u graph.Node, g traverse.Graph) Shortest {
 	return path
 }
 
-// 计算从u 到 v具体的路径长度
-func DijkstraFromTo(u graph.Node, g traverse.Graph, dst int64) float64 {
+// 计算从u 到 v具体的路径长度 只适合带权重的有向图
+func DijkstraFromToWeightedDirectedGraph(u graph.Node, g traverse.Graph, dst int64) float64 {
 	var path Shortest
 	if h, ok := g.(graph.Graph); ok {
 		if h.Node(u.ID()) == nil {
@@ -111,6 +112,14 @@ func DijkstraFromTo(u graph.Node, g traverse.Graph, dst int64) float64 {
 	} else {
 		weight = UniformCost(g)
 	}
+	wdg := g.(*simple.WeightedDirectedGraph)
+	// 找到所有可以直接到v的节点
+	froms := wdg.To(dst)
+	allDirectFrom := make(map[int64]struct{})
+	for froms.Next() {
+		v := froms.Node()
+		allDirectFrom[v.ID()] = struct{}{}
+	}
 
 	// Dijkstra's algorithm here is implemented essentially as
 	// described in Function B.2 in figure 6 of UTCS Technical
@@ -123,15 +132,15 @@ func DijkstraFromTo(u graph.Node, g traverse.Graph, dst int64) float64 {
 	//
 	// http://www.cs.utexas.edu/ftp/techreports/tr07-54.pdf
 	Q := priorityQueue{{node: u, dist: 0}}
-	startPopCnt := false
-	popLen := 0
+	// startPopCnt := false
+	// popLen := 0
 	find := false
 
 	for Q.Len() != 0 {
 		mid := heap.Pop(&Q).(distanceNode)
-		if startPopCnt {
-			popLen--
-		}
+		// if startPopCnt {
+		// 	popLen--
+		// }
 		k := path.indexOf[mid.node.ID()]
 		if mid.dist > path.dist[k] {
 			continue
@@ -160,13 +169,18 @@ func DijkstraFromTo(u graph.Node, g traverse.Graph, dst int64) float64 {
 			}
 			if vid == dst {
 				find = true
+				delete(allDirectFrom, mnid)
 			}
 		}
-		if find && !startPopCnt {
-			startPopCnt = true
-			popLen = Q.Len()
-		}
-		if startPopCnt && popLen < 0 {
+		// if find && !startPopCnt {
+		// 	startPopCnt = true
+		// 	popLen = Q.Len()
+		// }
+		// if startPopCnt && popLen < 0 {
+		// 	break
+		// }
+		if len(allDirectFrom) == 0 {
+			// 说明所有到v的节点均已经遍历
 			break
 		}
 	}
